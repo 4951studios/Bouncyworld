@@ -1,0 +1,28 @@
+{
+  "name": "bouncy-world",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "cp index.html www/index.html && cp 'At All Costs - The Grey Room _ Golden Palms.mp3' 'www/At All Costs - The Grey Room _ Golden Palms.mp3' && mkdir -p 'www/sound effects' && cp 'sound effects/jump.mp3' 'www/sound effects/jump.mp3' && cp 'sound effects/star.mp3' 'www/sound effects/star.mp3' && cp 'sound effects/death.mp3' 'www/sound effects/death.mp3'",
+    "sync": "npm run build && npx cap sync",
+    "open:ios": "npm run sync && npx cap open ios",
+    "open:android": "npm run sync && npx cap open android",
+    "build:ios:sim": "cd ios/App && xcodebuild -project App.xcodeproj -scheme App -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' CODE_SIGNING_ALLOWED=NO build",
+    "smoke": "npm run build && node scripts/smoke-check.js",
+    "supabase:keepalive": "node scripts/supabase-keepalive.js",
+    "test": "npm run smoke"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.1"
+  }
+}
