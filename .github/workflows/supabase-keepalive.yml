@@ -2,7 +2,7 @@ name: Supabase Keepalive
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '0 0 */3 * *'
   workflow_dispatch:
 
 jobs:
@@ -10,34 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check 72-hour cadence
-        id: cadence
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          current_hour=$(( $(date -u +%s) / 3600 ))
-          if (( current_hour % 72 == 0 )); then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout
-        if: steps.cadence.outputs.run == 'true'
         uses: actions/checkout@v4
 
       - name: Use Node.js
-        if: steps.cadence.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Run Supabase keepalive
-        if: steps.cadence.outputs.run == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
