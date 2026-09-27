@@ -5,7 +5,6 @@ const test = require('node:test');
 const {
   KEEPALIVE_PATH,
   MAX_ATTEMPTS,
-  REQUEST_TIMEOUT_MS,
   requestKeepalive,
   runKeepalive
 } = require('./supabase-keepalive');
@@ -51,7 +50,7 @@ function createRequestStub(plans, calls = []) {
   };
 }
 
-test('requestKeepalive uses an IPv4 GET request with the expected timeout', async () => {
+test('requestKeepalive uses an IPv4 GET request', async () => {
   const calls = [];
   const requestImpl = createRequestStub([{ statusCode: 200, body: '{}' }], calls);
 
@@ -66,7 +65,6 @@ test('requestKeepalive uses an IPv4 GET request with the expected timeout', asyn
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.method, 'GET');
   assert.equal(calls[0].options.family, 4);
-  assert.equal(calls[0].options.timeout, REQUEST_TIMEOUT_MS);
 });
 
 

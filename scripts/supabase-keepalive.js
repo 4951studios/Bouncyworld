@@ -49,8 +49,7 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
       {
         method: 'GET',
         headers,
-        family: 4,
-        timeout: REQUEST_TIMEOUT_MS
+        family: 4
       },
       (response) => {
         let responseBody = '';
@@ -77,11 +76,6 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
       request.destroy(error);
     }, REQUEST_TIMEOUT_MS);
 
-    request.on('timeout', () => {
-      const error = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
-      error.retryable = true;
-      request.destroy(error);
-    });
     request.on('error', (error) => {
       settle(reject, markRetryableError(error));
     });
