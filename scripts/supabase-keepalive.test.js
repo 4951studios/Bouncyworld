@@ -72,7 +72,9 @@ test('requestKeepalive uses an IPv4 GET request with the expected timeout', asyn
 
 
 test('requestKeepalive rejects when the response stream errors', async () => {
-  const requestImpl = createRequestStub([{ statusCode: 200, responseError: new Error('socket closed') }]);
+  const requestImpl = createRequestStub([
+    { statusCode: 200, responseError: Object.assign(new Error('socket closed'), { code: 'ECONNRESET' }) }
+  ]);
 
   await assert.rejects(
     requestKeepalive(
@@ -88,7 +90,7 @@ test('runKeepalive retries transient request failures and preserves the keepaliv
   const calls = [];
   const requestImpl = createRequestStub(
     [
-      { error: new Error('fetch failed') },
+      { error: Object.assign(new Error('fetch failed'), { code: 'ETIMEDOUT' }) },
       { statusCode: 200, body: '{}' }
     ],
     calls

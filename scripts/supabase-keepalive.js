@@ -3,6 +3,16 @@ const https = require('node:https');
 const KEEPALIVE_PATH = '/auth/v1/settings';
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_ATTEMPTS = 3;
+const RETRYABLE_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'ERR_SOCKET_CONNECTION_TIMEOUT'
+]);
 
 function truncateResponseBody(body) {
   return String(body).slice(0, 300);
@@ -10,6 +20,14 @@ function truncateResponseBody(body) {
 
 function isRetryableStatus(statusCode) {
   return statusCode === 429 || statusCode >= 500;
+}
+
+function markRetryableError(error) {
+  if (error instanceof Error && RETRYABLE_ERROR_CODES.has(error.code)) {
+    error.retryable = true;
+  }
+
+  return error;
 }
 
 function requestKeepalive(url, headers, requestImpl = https.request) {
@@ -40,7 +58,7 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
           responseBody += chunk;
         });
         response.on('error', (error) => {
-          settle(reject, error);
+          settle(reject, markRetryableError(error));
         });
         response.on('end', () => {
           settle(resolve, {
@@ -52,10 +70,12 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
     );
 
     request.on('timeout', () => {
-      request.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`));
+      const error = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      error.retryable = true;
+      request.destroy(error);
     });
     request.on('error', (error) => {
-      settle(reject, error);
+      settle(reject, markRetryableError(error));
     });
     request.end();
   });
@@ -101,8 +121,7 @@ async function runKeepalive({
     } catch (error) {
       lastError = error;
 
-      const shouldRetry =
-        attempt < MAX_ATTEMPTS && (!(error instanceof Error) || error.retryable !== false);
+      const shouldRetry = attempt < MAX_ATTEMPTS && error instanceof Error && error.retryable === true;
 
       if (!shouldRetry) {
         throw error;
