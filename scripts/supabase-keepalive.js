@@ -33,12 +33,14 @@ function markRetryableError(error) {
 function requestKeepalive(url, headers, requestImpl = https.request) {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let requestTimeout;
     const settle = (callback, value) => {
       if (settled) {
         return;
       }
 
       settled = true;
+      clearTimeout(requestTimeout);
       callback(value);
     };
 
@@ -68,6 +70,12 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
         });
       }
     );
+
+    requestTimeout = setTimeout(() => {
+      const error = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      error.retryable = true;
+      request.destroy(error);
+    }, REQUEST_TIMEOUT_MS);
 
     request.on('timeout', () => {
       const error = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
