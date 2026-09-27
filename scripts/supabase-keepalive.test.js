@@ -106,6 +106,24 @@ test('runKeepalive retries transient request failures and preserves the keepaliv
   assert.ok(calls[1].options.headers.Authorization);
 });
 
+
+
+test('runKeepalive does not retry deterministic client failures', async () => {
+  const calls = [];
+  const requestImpl = createRequestStub([{ statusCode: 401, body: 'unauthorized' }], calls);
+
+  await assert.rejects(
+    runKeepalive({
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseAnonKey: 'anon-key',
+      requestImpl
+    }),
+    /Keepalive failed with status 401: unauthorized/
+  );
+
+  assert.equal(calls.length, 1);
+});
+
 test('runKeepalive fails after the final unsuccessful attempt', async () => {
   const requestImpl = createRequestStub(
     Array.from({ length: MAX_ATTEMPTS }, () => ({ statusCode: 503, body: 'service unavailable' }))

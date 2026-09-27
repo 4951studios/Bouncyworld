@@ -8,6 +8,10 @@ function truncateResponseBody(body) {
   return String(body).slice(0, 300);
 }
 
+function isRetryableStatus(statusCode) {
+  return statusCode === 429 || statusCode >= 500;
+}
+
 function requestKeepalive(url, headers, requestImpl = https.request) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -85,22 +89,30 @@ async function runKeepalive({
       const response = await requestKeepalive(keepaliveUrl, headers, requestImpl);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(
+        const error = new Error(
           `Keepalive failed with status ${response.statusCode}: ${truncateResponseBody(response.body)}`
         );
+
+        error.retryable = isRetryableStatus(response.statusCode);
+        throw error;
       }
 
       return `Supabase keepalive succeeded at ${new Date().toISOString()}`;
     } catch (error) {
       lastError = error;
 
-      if (attempt < MAX_ATTEMPTS) {
-        console.warn(
-          `Keepalive request attempt ${attempt} failed: ${
-            error instanceof Error ? error.message : String(error)
-          }. Retrying...`
-        );
+      const shouldRetry =
+        attempt < MAX_ATTEMPTS && (!(error instanceof Error) || error.retryable !== false);
+
+      if (!shouldRetry) {
+        throw error;
       }
+
+      console.warn(
+        `Keepalive request attempt ${attempt} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }. Retrying...`
+      );
     }
   }
 
