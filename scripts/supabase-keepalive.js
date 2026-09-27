@@ -10,6 +10,16 @@ function truncateResponseBody(body) {
 
 function requestKeepalive(url, headers, requestImpl = https.request) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (callback, value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      callback(value);
+    };
+
     const request = requestImpl(
       url,
       {
@@ -25,8 +35,11 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
         response.on('data', (chunk) => {
           responseBody += chunk;
         });
+        response.on('error', (error) => {
+          settle(reject, error);
+        });
         response.on('end', () => {
-          resolve({
+          settle(resolve, {
             statusCode: response.statusCode ?? 0,
             body: responseBody
           });
@@ -37,7 +50,9 @@ function requestKeepalive(url, headers, requestImpl = https.request) {
     request.on('timeout', () => {
       request.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`));
     });
-    request.on('error', reject);
+    request.on('error', (error) => {
+      settle(reject, error);
+    });
     request.end();
   });
 }

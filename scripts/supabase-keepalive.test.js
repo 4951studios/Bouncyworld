@@ -33,6 +33,11 @@ function createRequestStub(plans, calls = []) {
           response.emit('data', plan.body);
         }
 
+        if (plan.responseError) {
+          response.emit('error', plan.responseError);
+          return;
+        }
+
         response.emit('end');
       });
     };
@@ -62,6 +67,21 @@ test('requestKeepalive uses an IPv4 GET request with the expected timeout', asyn
   assert.equal(calls[0].options.method, 'GET');
   assert.equal(calls[0].options.family, 4);
   assert.equal(calls[0].options.timeout, REQUEST_TIMEOUT_MS);
+});
+
+
+
+test('requestKeepalive rejects when the response stream errors', async () => {
+  const requestImpl = createRequestStub([{ statusCode: 200, responseError: new Error('socket closed') }]);
+
+  await assert.rejects(
+    requestKeepalive(
+      new URL('https://example.supabase.co/auth/v1/settings'),
+      { apikey: 'anon-key' },
+      requestImpl
+    ),
+    /socket closed/
+  );
 });
 
 test('runKeepalive retries transient request failures and preserves the keepalive path', async () => {
