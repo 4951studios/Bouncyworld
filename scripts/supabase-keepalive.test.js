@@ -1,0 +1,102 @@
+const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
+const test = require('node:test');
+
+const {
+  KEEPALIVE_PATH,
+  MAX_ATTEMPTS,
+  REQUEST_TIMEOUT_MS,
+  requestKeepalive,
+  runKeepalive
+} = require('./supabase-keepalive');
+
+function createRequestStub(plans, calls = []) {
+  return (url, options, onResponse) => {
+    const plan = plans.shift();
+    calls.push({ url: String(url), options });
+
+    const request = new EventEmitter();
+    request.end = () => {
+      process.nextTick(() => {
+        if (plan.error) {
+          request.emit('error', plan.error);
+          return;
+        }
+
+        const response = new EventEmitter();
+        response.statusCode = plan.statusCode ?? 200;
+        response.setEncoding = () => {};
+
+        onResponse(response);
+
+        if (plan.body) {
+          response.emit('data', plan.body);
+        }
+
+        response.emit('end');
+      });
+    };
+    request.destroy = (error) => {
+      if (error) {
+        request.emit('error', error);
+      }
+    };
+
+    return request;
+  };
+}
+
+test('requestKeepalive uses an IPv4 GET request with the expected timeout', async () => {
+  const calls = [];
+  const requestImpl = createRequestStub([{ statusCode: 200, body: '{}' }], calls);
+
+  const response = await requestKeepalive(
+    new URL('https://example.supabase.co/auth/v1/settings'),
+    { apikey: 'anon-key' },
+    requestImpl
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body, '{}');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.method, 'GET');
+  assert.equal(calls[0].options.family, 4);
+  assert.equal(calls[0].options.timeout, REQUEST_TIMEOUT_MS);
+});
+
+test('runKeepalive retries transient request failures and preserves the keepalive path', async () => {
+  const calls = [];
+  const requestImpl = createRequestStub(
+    [
+      { error: new Error('fetch failed') },
+      { statusCode: 200, body: '{}' }
+    ],
+    calls
+  );
+
+  const message = await runKeepalive({
+    supabaseUrl: 'https://example.supabase.co/',
+    supabaseAnonKey: 'anon-key',
+    requestImpl
+  });
+
+  assert.match(message, /^Supabase keepalive succeeded at /);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, `https://example.supabase.co${KEEPALIVE_PATH}`);
+  assert.ok(calls[1].options.headers.Authorization);
+});
+
+test('runKeepalive fails after the final unsuccessful attempt', async () => {
+  const requestImpl = createRequestStub(
+    Array.from({ length: MAX_ATTEMPTS }, () => ({ statusCode: 503, body: 'service unavailable' }))
+  );
+
+  await assert.rejects(
+    runKeepalive({
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseAnonKey: 'anon-key',
+      requestImpl
+    }),
+    /Keepalive failed with status 503: service unavailable/
+  );
+});
